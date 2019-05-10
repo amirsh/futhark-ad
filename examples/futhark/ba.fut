@@ -21,20 +21,18 @@ module fs (M: real) = {
 
   let rodrigues_rotate_point (rot: point_3d) (X: point_3d) =
       let sqtheta = v3d.quadrance rot in
-      if M.(sqtheta != i32 0) then
-          let theta = M.sqrt sqtheta
-          let costheta = M.cos theta
-          let sintheta = M.sin theta
-          let theta_inv = M.(i32 1 / theta)
+      let theta = M.sqrt sqtheta
+      let costheta = M.cos theta
+      let sintheta = M.sin theta
+      let theta_inv = M.(i32 1 / theta)
 
-          let w = v3d.scale theta_inv rot
-          let w_cross_X = v3d.cross w X
-          let tmp = M.(v3d.dot w X * (i32 1 - costheta))
+      let w = v3d.scale theta_inv rot
+      let w_cross_X = v3d.cross w X
+      let tmp = M.(v3d.dot w X * (i32 1 - costheta))
 
-          in v3d.(scale costheta X +
-                  scale sintheta w_cross_X +
-                  scale tmp w)
-      else v3d.(X + cross rot X)
+      in v3d.(scale costheta X +
+              scale sintheta w_cross_X +
+              scale tmp w)
 
   let radial_distort (rad_params: point_2d) (proj: point_2d) =
     let rsq = v2d.quadrance proj
@@ -49,6 +47,13 @@ module fs (M: real) = {
                                    (v2d.scale M.(i32 1/Xcam.z) {x=Xcam.x, y=Xcam.y})
     in point_2d cam[X0_IDX:X0_IDX+2] v2d.+
        v2d.scale cam[FOCAL_IDX] distorted
+
+  let project_all n xs cam = 
+    flatten (tabulate n (\i -> 
+      let x = point_3d xs[(3*i):(3+3*i)]
+      let res = project cam x
+      in [res.x, res.y]
+    ))
 
   let compute_reproj_err cam X w feat =
     v2d.scale w (project cam X v2d.- feat)
@@ -93,3 +98,24 @@ entry diff [n][m][p] (cams: [n][]f32)
           (map (\i -> unsafe cams[i]) obs[:,0])
           (map (\i -> unsafe X[i]) obs[:,1])
           w feats
+
+-- ==
+-- random input { [29]f32 }
+-- random input { [47]f32 }
+-- random input { [86]f32 }
+-- random input { [161]f32 }
+-- random input { [311]f32 }
+-- random input { [611]f32 }
+-- random input { [1211]f32 }
+-- random input { [2411]f32 }
+
+let main vec1 = 
+  let dim = length vec1
+  let n = (dim - 11) / 3
+  let vec1' = map f32_dual.inject vec1
+  let cam = vec1[0:11]
+  in tabulate 11 (\i -> 
+    let camd = tabulate 11 (\j -> f32.bool(i == j))
+    let cam' = map2 (f32_dual.make_dual) cam camd
+    in fs_f32_dual.project_all n vec1' cam'
+  )
